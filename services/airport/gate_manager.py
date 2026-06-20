@@ -30,6 +30,7 @@ class Gate:
         self.broadcast = broadcast
         self.queue: list[dict] = []
         self.currently_processing: dict | None = None
+        self.active_family_surname: str | None = None
         self.lock = threading.Lock()
         self.active = True
 
@@ -58,6 +59,24 @@ class Gate:
         current_time = now if now is not None else game_now()
         return self._current_processing_remaining(current_time) + (queue_position * self.processing_time)
 
+    def _pop_next_guest_locked(self) -> dict | None:
+        if not self.queue:
+            return None
+
+        if self.active_family_surname is not None:
+            for index, guest in enumerate(self.queue):
+                if guest["surname"] == self.active_family_surname:
+                    return self.queue.pop(index)
+            self.active_family_surname = None
+
+        for index, guest in enumerate(self.queue):
+            if guest["age"] < 12:
+                continue
+            self.active_family_surname = guest["surname"]
+            return self.queue.pop(index)
+
+        return None
+
     def start(self):
         thread = threading.Thread(target=self._run, daemon=True)
         thread.start()
@@ -66,8 +85,8 @@ class Gate:
         while self.active:
             guest = None
             with self.lock:
-                if self.queue:
-                    guest = self.queue.pop(0)
+                guest = self._pop_next_guest_locked()
+                if guest is not None:
                     guest["status"] = "processing"
                     guest["started_at"] = game_now()
                     self.currently_processing = guest
@@ -104,6 +123,8 @@ class Gate:
 
             with self.lock:
                 self.currently_processing = None
+                if not any(item["surname"] == self.active_family_surname for item in self.queue):
+                    self.active_family_surname = None
 
 
 class GateManager:
@@ -159,13 +180,36 @@ class GateManager:
         candidates = [g for g in self.gates.values() if g.gate_type == gate_type]
         return min(candidates, key=lambda g: len(g.queue))
 
+    def _family_gate_for_guest(self, guest: dict) -> Gate | None:
+        surname = guest["surname"]
+        passport_type = guest["passport_type"]
+        best_gate = None
+        best_count = 0
+
+        for gate in self.gates.values():
+            if passport_type == "non-EU" and gate.gate_type != "ALL":
+                continue
+
+            with gate.lock:
+                family_count = sum(1 for member in gate.queue if member["surname"] == surname)
+                if gate.currently_processing and gate.currently_processing["surname"] == surname:
+                    family_count += 1
+
+            if family_count > best_count:
+                best_gate = gate
+                best_count = family_count
+
+        return best_gate if best_count > 0 else None
+
     def assign_and_enqueue(self, guest: dict) -> dict:
-        if guest["passport_type"] == "EU":
-            eu_gate = self._shortest_queue_gate("EU")
-            all_gate = self._shortest_queue_gate("ALL")
-            gate = all_gate if len(all_gate.queue) < len(eu_gate.queue) else eu_gate
-        else:
-            gate = self._shortest_queue_gate("ALL")
+        gate = self._family_gate_for_guest(guest)
+        if gate is None:
+            if guest["passport_type"] == "EU":
+                eu_gate = self._shortest_queue_gate("EU")
+                all_gate = self._shortest_queue_gate("ALL")
+                gate = all_gate if len(all_gate.queue) < len(eu_gate.queue) else eu_gate
+            else:
+                gate = self._shortest_queue_gate("ALL")
 
         guest["queued_at"] = game_now()
         guest["status"] = "queued"
