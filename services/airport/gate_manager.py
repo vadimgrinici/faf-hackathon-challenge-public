@@ -353,6 +353,7 @@ class GateManager:
         with gate.lock:
             position = gate.enqueue(guest)
             queue_size = self._gate_size_locked(gate)
+            estimated_wait_seconds = gate.estimate_wait_seconds(position)
 
         return {
             "guest_id": guest["guest_id"],
@@ -360,6 +361,7 @@ class GateManager:
             "position": position,
             "queue_size": queue_size,
             "queued_at": guest["queued_at"],
+            "estimated_wait_seconds": estimated_wait_seconds,
         }
 
     def get_guest(self, guest_id: str) -> dict | None:
