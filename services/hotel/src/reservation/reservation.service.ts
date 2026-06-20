@@ -160,6 +160,7 @@ export class ReservationService {
         FROM "Reservation" r
         JOIN "Room" rm ON rm.id = r.room_id
         WHERE r.guest_id = ${Prisma.raw(`'${guestId}'`)}
+          AND r.status = 'CONFIRMED'
         ORDER BY r.check_in_day DESC
         LIMIT 1
       `,

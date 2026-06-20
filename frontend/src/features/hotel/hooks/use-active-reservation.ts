@@ -15,6 +15,7 @@ export function useActiveReservation() {
     queryKey: [...HOTEL_KEYS.RESERVATION, guest?.id],
     queryFn: () => getReservationByGuest(guest!.id),
     enabled: !!guest,
+    retry: false,
   });
 
   const mutation = useMutation({
@@ -31,7 +32,7 @@ export function useActiveReservation() {
   });
 
   return {
-    reservation: query.data ?? null,
+    reservation: query.isError ? null : query.data ?? null,
     isLoading: query.isLoading,
     cancel: (id: string) => mutation.mutate(id),
     isCancelling: mutation.isPending,
