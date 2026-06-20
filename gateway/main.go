@@ -26,9 +26,13 @@ func main() {
 	r.Use(CORSMiddleware(cfg.CORSOrigins))
 	rl := NewRateLimiter(cfg.RateLimitPerWindow, cfg.RateLimitWindow)
 	r.Use(RateLimitMiddleware(rl))
+	r.Use(AuthMiddleware(cfg))
 
 	// Health check (aggregates all backend health endpoints)
 	r.Get("/health", HealthHandler(cfg))
+	r.Post("/auth/guest", GuestAuthHandler(cfg))
+	r.Post("/auth/admin", AdminAuthHandler(cfg))
+	r.Get("/auth/me", MeAuthHandler(cfg))
 
 	// Admin: adjust the rate limiter at runtime.
 	r.Put("/admin/rate-limit", AdminRateLimitHandler(rl))

@@ -22,8 +22,8 @@ function arrivalRefetchInterval(query: ArrivalStatusQuery): number | false {
 }
 
 export function useLanded(): boolean {
-  const guest = useSessionStore((s) => s.guest);
-  const { data } = useArrivalStatus(guest?.id ?? null);
+  const arrivalGuestId = useSessionStore((s) => s.arrivalGuestId);
+  const { data } = useArrivalStatus(arrivalGuestId);
   return data?.status === ARRIVAL_COMPLETE_STATUS;
 }
 

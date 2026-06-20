@@ -18,14 +18,20 @@ export type AppSession = GuestSession | AdminSession;
 interface PersistedSessionState {
   session?: AppSession | null;
   guest?: GuestProfile | null;
+  arrivalGuestId?: string | null;
+  authToken?: string | null;
 }
 
 interface SessionState {
   session: AppSession | null;
   guest: GuestProfile | null;
+  arrivalGuestId: string | null;
+  authToken: string | null;
   isAdmin: boolean;
   selectGuest: (guest: GuestProfile) => void;
-  loginAdmin: (displayName?: string) => void;
+  loginAdmin: (displayName?: string, authToken?: string | null) => void;
+  setArrivalGuestId: (guestId: string | null) => void;
+  setAuthToken: (token: string | null) => void;
   clearSession: () => void;
   clearGuest: () => void;
 }
@@ -33,6 +39,8 @@ interface SessionState {
 const EMPTY_SESSION_STATE = {
   session: null,
   guest: null,
+  arrivalGuestId: null,
+  authToken: null,
   isAdmin: false,
 } satisfies Pick<SessionState, "session" | "guest" | "isAdmin">;
 
@@ -42,14 +50,18 @@ function guestSessionState(guest: GuestProfile) {
   return {
     session,
     guest,
+    arrivalGuestId: null,
+    authToken: null,
     isAdmin: false,
   };
 }
 
-function adminSessionState(displayName: string) {
+function adminSessionState(displayName: string, authToken: string | null) {
   return {
     session: { role: "admin", displayName } satisfies AdminSession,
     guest: null,
+    arrivalGuestId: null,
+    authToken,
     isAdmin: true,
   };
 }
@@ -66,6 +78,8 @@ function migrateSessionState(persisted: unknown): Partial<SessionState> {
     return {
       session,
       guest: deriveGuest(session),
+      arrivalGuestId: state?.arrivalGuestId ?? null,
+      authToken: state?.authToken ?? null,
       isAdmin: session.role === "admin",
     };
   }
@@ -84,8 +98,12 @@ export const useSessionStore = create<SessionState>()(
 
       selectGuest: (guest) => set(guestSessionState(guest)),
 
-      loginAdmin: (displayName = "Admin") =>
-        set(adminSessionState(displayName)),
+      loginAdmin: (displayName = "Admin", authToken = null) =>
+        set(adminSessionState(displayName, authToken)),
+
+      setArrivalGuestId: (guestId) => set({ arrivalGuestId: guestId }),
+
+      setAuthToken: (token) => set({ authToken: token }),
 
       clearSession: () => set(EMPTY_SESSION_STATE),
 
@@ -94,7 +112,11 @@ export const useSessionStore = create<SessionState>()(
     {
       name: "kikis-paradise-session",
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => ({ session: state.session }),
+      partialize: (state) => ({
+        session: state.session,
+        arrivalGuestId: state.arrivalGuestId,
+        authToken: state.authToken,
+      }),
       merge: (persisted, current) => ({
         ...current,
         ...migrateSessionState(persisted),

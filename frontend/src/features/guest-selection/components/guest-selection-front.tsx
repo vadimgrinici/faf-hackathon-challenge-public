@@ -13,11 +13,13 @@ import type { GuestProfile } from "@/types/guest";
 interface GuestSelectionFrontProps {
   onSelectGuest: (guest: GuestProfile) => void;
   onFlip: () => void;
+  isSelectingGuest?: boolean;
 }
 
 export function GuestSelectionFront({
   onSelectGuest,
   onFlip,
+  isSelectingGuest,
 }: GuestSelectionFrontProps) {
   return (
     <SelectionPanel
@@ -33,7 +35,11 @@ export function GuestSelectionFront({
               key={guest.id}
               className="p-4 sm:basis-1/2 lg:basis-1/3"
             >
-              <GuestCard guest={guest} onSelect={onSelectGuest} />
+              <GuestCard
+                guest={guest}
+                onSelect={onSelectGuest}
+                disabled={isSelectingGuest}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>

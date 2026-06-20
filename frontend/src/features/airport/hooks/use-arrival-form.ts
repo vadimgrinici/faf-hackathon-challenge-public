@@ -13,6 +13,7 @@ import { AIRPORT_KEYS } from "@/features/airport/query-keys";
 
 export function useArrivalForm() {
   const guest = useSessionStore((s) => s.guest);
+  const setArrivalGuestId = useSessionStore((s) => s.setArrivalGuestId);
   const queryClient = useQueryClient();
 
   const form = useForm<ArrivalFormValues>({
@@ -22,9 +23,10 @@ export function useArrivalForm() {
 
   const mutation = useMutation({
     mutationFn: (values: ArrivalFormValues) => postArrival(values),
-    onSuccess: () => {
+    onSuccess: (response) => {
+      setArrivalGuestId(response.guest_id);
       queryClient.invalidateQueries({
-        queryKey: [...AIRPORT_KEYS.ARRIVAL, guest?.id],
+        queryKey: [...AIRPORT_KEYS.ARRIVAL, response.guest_id],
       });
     },
     onError: (error) => {

@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { IconShieldLock } from "@tabler/icons-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { env } from "@/config/env";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,12 +15,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { loginAdmin } from "@/features/auth/api/auth-client";
+import { useSessionStore } from "@/stores/session-store";
+import { toast } from "sonner";
 
 interface AdminLoginCardProps {
-  onLogin: () => void;
+  onLogin: (token: string) => void;
 }
-
-const ADMIN_PASSCODE = env.adminPasscode;
 
 const AdminLoginSchema = z.object({
   passcode: z.string().trim().min(1, "Enter the admin passcode."),
@@ -29,27 +30,25 @@ const AdminLoginSchema = z.object({
 type AdminLoginValues = z.infer<typeof AdminLoginSchema>;
 
 export function AdminLoginCard({ onLogin }: AdminLoginCardProps) {
+  const setAuthToken = useSessionStore((state) => state.setAuthToken);
   const form = useForm<AdminLoginValues>({
     resolver: zodResolver(AdminLoginSchema),
     defaultValues: { passcode: "" },
   });
 
-  function handleSubmit(values: AdminLoginValues) {
-    if (!ADMIN_PASSCODE) {
-      form.setError("passcode", {
-        message: "Admin login is not configured for this environment.",
-      });
-      return;
-    }
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    if (values.passcode !== ADMIN_PASSCODE) {
-      form.setError("passcode", {
-        message: "That admin passcode does not look right.",
-      });
-      return;
+  async function handleSubmit(values: AdminLoginValues) {
+    setIsSubmitting(true);
+    try {
+      const result = await loginAdmin({ passcode: values.passcode });
+      setAuthToken(result.token);
+      onLogin(result.token);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Admin login failed");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onLogin();
   }
 
   const error = form.formState.errors.passcode?.message;
@@ -111,6 +110,7 @@ export function AdminLoginCard({ onLogin }: AdminLoginCardProps) {
           className="w-full"
           type="submit"
           form="admin-login-form"
+          disabled={isSubmitting}
         >
           Enter as admin
         </Button>

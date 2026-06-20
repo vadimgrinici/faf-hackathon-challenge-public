@@ -3,6 +3,8 @@ import type { AxiosRequestConfig } from "axios";
 import type { ZodType } from "zod";
 
 import { env } from "@/config/env";
+import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore } from "@/stores/session-store";
 
 export type ApiError = { ok: false; status: number; message: string };
 export type ApiResult<T> = { ok: true; data: T } | ApiError;
@@ -47,6 +49,24 @@ function getErrorMessage(data: unknown, fallback: string): string {
 function createJsonApi(basePath = "") {
   const instance = axios.create({ baseURL: `${env.gatewayUrl}${basePath}` });
 
+  instance.interceptors.request.use((config) => {
+    const token = useSessionStore.getState().authToken;
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
+  instance.interceptors.request.use((config) => {
+    const token = useSessionStore.getState().authToken;
+    if (token) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  });
+
   async function request<T>(
     schema: ZodType<T>,
     config: AxiosRequestConfig
@@ -73,6 +93,7 @@ function createJsonApi(basePath = "") {
 }
 
 export const api = {
+  gateway: createJsonApi(),
   airport: createJsonApi("/api/airport"),
   beach: createJsonApi(),
   hotel: createJsonApi("/api/hotel"),

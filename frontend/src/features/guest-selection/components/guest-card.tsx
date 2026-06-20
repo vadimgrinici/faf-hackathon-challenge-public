@@ -15,9 +15,10 @@ import type { GuestProfile } from "@/types/guest";
 interface GuestCardProps {
   guest: GuestProfile;
   onSelect: (guest: GuestProfile) => void;
+  disabled?: boolean;
 }
 
-export function GuestCard({ guest, onSelect }: GuestCardProps) {
+export function GuestCard({ guest, onSelect, disabled }: GuestCardProps) {
   const initials = getInitials(guest);
 
   return (
@@ -72,6 +73,7 @@ export function GuestCard({ guest, onSelect }: GuestCardProps) {
         <Button
           data-testid="guest-confirm"
           className="w-full"
+          disabled={disabled}
           onClick={() => onSelect(guest)}
         >
           Choose this guest
