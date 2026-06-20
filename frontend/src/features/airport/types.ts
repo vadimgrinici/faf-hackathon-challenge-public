@@ -19,7 +19,6 @@ export const PostArrivalResponseSchema = z.object({
   position: z.number().int(),
   queue_size: z.number().int(),
   queued_at: z.number(),
-  estimated_wait_seconds: z.number(),
 });
 
 export const ArrivalStatusSchema = z.object({

@@ -1,5 +1,4 @@
 import { useForm } from "react-hook-form";
-import { useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -34,12 +33,6 @@ export function useArrivalForm() {
       toast.error(error.message);
     },
   });
-
-  useEffect(() => {
-    if (guest) {
-      form.reset(guestToArrivalForm(guest));
-    }
-  }, [form, guest]);
 
   return {
     form,
