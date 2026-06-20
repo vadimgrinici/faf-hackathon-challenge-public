@@ -28,7 +28,8 @@ class Gate:
         self.app = app
         self.broadcast = broadcast
         self.queue: list[dict] = []
-        self.currently_processing: dict | None = None
+        self.currently_processing: list[dict] = []
+        self.processing_started_at: float | None = None
         self.active_family_surname: str | None = None
         self.lock = threading.Lock()
         self.accepting = True
@@ -36,7 +37,7 @@ class Gate:
         self.thread_started = False
 
     def queue_size(self) -> int:
-        return len(self.queue) + (1 if self.currently_processing else 0)
+        return len(self.queue) + len(self.currently_processing)
 
     def enqueue(self, guest: dict) -> int:
         if not self.accepting:
@@ -52,52 +53,77 @@ class Gate:
         return insert_at + 1
 
     def _current_processing_remaining(self, now: float) -> float:
-        if not self.currently_processing:
+        if not self.currently_processing or self.processing_started_at is None:
             return 0.0
 
-        started_at = self.currently_processing.get("started_at")
-        if started_at is None:
-            return self.processing_time
-
-        elapsed = now - started_at
+        elapsed = now - self.processing_started_at
         return max(self.processing_time - elapsed, 0.0)
 
     def estimate_wait_seconds(self, queue_position: int, now: float | None = None) -> float:
         current_time = now if now is not None else game_now()
         return self._current_processing_remaining(current_time) + (queue_position * self.processing_time)
 
-    def _current_processing_remaining(self, now: float) -> float:
-        if not self.currently_processing:
-            return 0.0
-
-        started_at = self.currently_processing.get("started_at")
-        if started_at is None:
-            return self.processing_time
-
-        elapsed = now - started_at
-        return max(self.processing_time - elapsed, 0.0)
-
-    def estimate_wait_seconds(self, queue_position: int, now: float | None = None) -> float:
-        current_time = now if now is not None else game_now()
-        return self._current_processing_remaining(current_time) + (queue_position * self.processing_time)
-
-    def _pop_next_guest_locked(self) -> dict | None:
-        if not self.queue:
-            return None
-
-        if self.active_family_surname is not None:
-            for index, guest in enumerate(self.queue):
-                if guest["surname"] == self.active_family_surname:
-                    return self.queue.pop(index)
-            self.active_family_surname = None
-
-        for index, guest in enumerate(self.queue):
-            if guest["age"] < 12:
+    def _has_accompanying_adult_locked(self, minor: dict, exclude_index: int | None = None) -> bool:
+        """A minor can only clear passport control alongside a same-surname
+        guest aged 12+ who is also currently waiting at this gate."""
+        for i, other in enumerate(self.queue):
+            if i == exclude_index:
                 continue
-            self.active_family_surname = guest["surname"]
-            return self.queue.pop(index)
+            if other["surname"] == minor["surname"] and other["age"] >= 12:
+                return True
+        return False
 
-        return None
+    def _pop_next_batch_locked(self) -> list[dict]:
+        """Pop the next family unit to be processed together.
+
+        Guests under 12 are skipped (held in the queue, where they keep
+        advancing normally) unless a same-surname guest aged 12+ is also
+        present in the queue to accompany them through the booth.
+        """
+        if not self.queue:
+            return []
+
+        surname = self.active_family_surname
+
+        if surname is None:
+            for index, guest in enumerate(self.queue):
+                if guest["age"] < 12 and not self._has_accompanying_adult_locked(guest, exclude_index=index):
+                    continue
+                surname = guest["surname"]
+                break
+            else:
+                return []
+            self.active_family_surname = surname
+
+        family_indices = [i for i, g in enumerate(self.queue) if g["surname"] == surname]
+        if not family_indices:
+            self.active_family_surname = None
+            return []
+
+        adults_present = any(self.queue[i]["age"] >= 12 for i in family_indices)
+
+        batch: list[dict] = []
+        held_minor = False
+        for i in family_indices:
+            guest = self.queue[i]
+            if guest["age"] < 12 and not adults_present:
+                held_minor = True
+                continue
+            batch.append(guest)
+
+        if not batch:
+            # Only unaccompanied minors remain for this family right now —
+            # hold them and free up the gate to serve someone else.
+            self.active_family_surname = None
+            return []
+
+        for guest in batch:
+            self.queue.remove(guest)
+
+        if not held_minor:
+            self.active_family_surname = None  # family fully cleared this gate
+
+        return batch
 
     def start(self):
         if self.thread_started:
@@ -111,48 +137,54 @@ class Gate:
 
     def _run(self):
         while self.running:
-            guest = None
+            batch: list[dict] = []
             with self.lock:
-                guest = self._pop_next_guest_locked()
-                if guest is not None:
-                    guest["status"] = "processing"
-                    guest["started_at"] = game_now()
-                    self.currently_processing = guest
+                batch = self._pop_next_batch_locked()
+                if batch:
+                    now = game_now()
+                    for guest in batch:
+                        guest["status"] = "processing"
+                        guest["started_at"] = now
+                    self.currently_processing = batch
+                    self.processing_started_at = now
 
-            if guest is None:
+            if not batch:
                 time.sleep(0.1)
                 continue
 
             with self.app.app_context():
-                arrival = db.session.get(Arrival, guest["arrival_id"])
-                if arrival:
-                    arrival.status = "processing"
-                    db.session.commit()
+                for guest in batch:
+                    arrival = db.session.get(Arrival, guest["arrival_id"])
+                    if arrival:
+                        arrival.status = "processing"
+                db.session.commit()
 
             real_delay = self.processing_time / GAME_SPEED
-            started_at = game_now()
+            started_at = self.processing_started_at
             time.sleep(real_delay)
 
             processed_at = game_now()
             wait_time = processed_at - started_at
-            guest["status"] = "processed"
-            guest["processed_at"] = processed_at
-            guest["wait_time_seconds"] = wait_time
+            for guest in batch:
+                guest["status"] = "processed"
+                guest["processed_at"] = processed_at
+                guest["wait_time_seconds"] = wait_time
 
             with self.app.app_context():
-                arrival = db.session.get(Arrival, guest["arrival_id"])
-                if arrival:
-                    arrival.status = "processed"
-                    arrival.processed_at = processed_at
-                    arrival.wait_time_seconds = wait_time
-                    db.session.commit()
+                for guest in batch:
+                    arrival = db.session.get(Arrival, guest["arrival_id"])
+                    if arrival:
+                        arrival.status = "processed"
+                        arrival.processed_at = processed_at
+                        arrival.wait_time_seconds = wait_time
+                db.session.commit()
 
-            self.broadcast.publish_event(guest)
+            for guest in batch:
+                self.broadcast.publish_event(guest)
 
             with self.lock:
-                self.currently_processing = None
-                if not any(item["surname"] == self.active_family_surname for item in self.queue):
-                    self.active_family_surname = None
+                self.currently_processing = []
+                self.processing_started_at = None
 
 
 class GateManager:
@@ -206,8 +238,7 @@ class GateManager:
 
     def _gate_status_locked(self, gate: Gate, now: float) -> dict:
         queue_snapshot = []
-        cp = gate.currently_processing
-        if cp:
+        for cp in gate.currently_processing:
             queue_snapshot.append({**cp, "position": 0, "wait_time_seconds": now - cp["queued_at"]})
         for i, g in enumerate(gate.queue):
             queue_snapshot.append({**g, "position": i + 1, "wait_time_seconds": now - g["queued_at"]})
@@ -282,8 +313,7 @@ class GateManager:
 
             with gate.lock:
                 family_count = sum(1 for member in gate.queue if member["surname"] == surname)
-                if gate.currently_processing and gate.currently_processing["surname"] == surname:
-                    family_count += 1
+                family_count += sum(1 for member in gate.currently_processing if member["surname"] == surname)
 
             if family_count > best_count:
                 best_gate = gate
@@ -342,7 +372,7 @@ class GateManager:
         if gate is None:
             return None
         with gate.lock:
-            if gate.currently_processing and gate.currently_processing["guest_id"] == guest_id:
+            if any(g["guest_id"] == guest_id for g in gate.currently_processing):
                 return 0
             for i, g in enumerate(gate.queue):
                 if g["guest_id"] == guest_id:

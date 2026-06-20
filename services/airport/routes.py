@@ -4,10 +4,23 @@ from models import Arrival
 from schemas import ArrivalInputSchema, ArrivalSchema
 from game_time import game_now
 from stats import get_stats
+import base64
+import json
 
 arrival_input_schema = ArrivalInputSchema()
 arrival_schema = ArrivalSchema()
 arrivals_schema = ArrivalSchema(many=True)
+
+
+def _encode_cursor(queued_at: float, arrival_id: int) -> str:
+    payload = json.dumps([queued_at, arrival_id])
+    return base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+
+
+def _decode_cursor(token: str) -> tuple[float, int]:
+    payload = base64.urlsafe_b64decode(token.encode("ascii")).decode("utf-8")
+    queued_at, arrival_id = json.loads(payload)
+    return float(queued_at), int(arrival_id)
 
 
 def register_routes(app):
@@ -63,8 +76,58 @@ def register_routes(app):
         if passport_type:
             query = query.filter_by(passport_type=passport_type)
 
-        arrivals = query.order_by(Arrival.queued_at.desc()).all()
-        return jsonify({"arrivals": arrivals_schema.dump(arrivals)}), 200
+        # Stable order: queued_at desc, with id desc as a tiebreaker since
+        # queued_at is not guaranteed unique.
+        query = query.order_by(Arrival.queued_at.desc(), Arrival.id.desc())
+
+        total = query.count()
+
+        limit_param = request.args.get("limit")
+        if limit_param is None:
+            # No limit provided: preserve original behavior — return
+            # everything in one response.
+            arrivals = query.all()
+            return jsonify({
+                "arrivals": arrivals_schema.dump(arrivals),
+                "next_cursor": None,
+                "total": total,
+            }), 200
+
+        try:
+            limit = int(limit_param)
+            if limit <= 0:
+                raise ValueError
+        except ValueError:
+            return jsonify({"error": "limit must be a positive integer"}), 400
+
+        cursor_param = request.args.get("cursor")
+        if cursor_param:
+            try:
+                cursor_queued_at, cursor_id = _decode_cursor(cursor_param)
+            except Exception:
+                return jsonify({"error": "Invalid cursor"}), 400
+
+            query = query.filter(
+                (Arrival.queued_at < cursor_queued_at)
+                | ((Arrival.queued_at == cursor_queued_at) & (Arrival.id < cursor_id))
+            )
+
+        # Fetch one extra row to know whether there's a next page.
+        page = query.limit(limit + 1).all()
+
+        has_more = len(page) > limit
+        page = page[:limit]
+
+        next_cursor = None
+        if has_more and page:
+            last = page[-1]
+            next_cursor = _encode_cursor(last.queued_at, last.id)
+
+        return jsonify({
+            "arrivals": arrivals_schema.dump(page),
+            "next_cursor": next_cursor,
+            "total": total,
+        }), 200
 
     @app.route("/queue", methods=["GET"])
     def get_queue():
