@@ -118,6 +118,8 @@ On startup, the gate manager rehydrates in-memory queues from the database. Any 
 | GET    | `/arrivals/:guest_id`         | Get arrival status for a specific guest  |
 | GET    | `/queue`                      | Live gate queue status                   |
 | GET    | `/stats`                      | Aggregate airport statistics             |
+| POST   | `/admin/gates/open`           | Open an existing gate or add a new gate  |
+| POST   | `/admin/gates/close`          | Close a gate and redistribute queued guests |
 
 ## API contract
 
@@ -228,6 +230,7 @@ Response 200:
     {
       "gate_id": "ALL-1",
       "gate_type": "ALL",
+      "open": true,
       "queue_size": 2,
       "queue": [
         {
@@ -252,6 +255,31 @@ Response 200:
   "current_game_time": 54321.0
 }
 ```
+
+### POST /admin/gates/open
+
+Request:
+
+```json
+{
+  "gate_type": "EU",
+  "gate_id": "EU-4"
+}
+```
+
+If `gate_id` is omitted, the service creates the next gate in sequence for that type.
+
+### POST /admin/gates/close
+
+Request:
+
+```json
+{
+  "gate_id": "ALL-2"
+}
+```
+
+Closing a gate stops it from receiving new guests and redistributes any waiting guests to other open gates when possible. The gate remains visible in `/queue` with `open: false`.
 
 ### GET /stats
 
