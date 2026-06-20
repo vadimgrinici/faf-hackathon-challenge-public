@@ -147,7 +147,8 @@ Response 202:
   "gate": "EU-1",
   "position": 1,
   "queue_size": 1,
-  "queued_at": 12345.67
+  "queued_at": 12345.67,
+  "estimated_wait_seconds": 300
 }
 ```
 

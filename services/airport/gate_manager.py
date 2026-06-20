@@ -50,6 +50,21 @@ class Gate:
         self.queue.insert(insert_at, guest)
         return insert_at + 1
 
+    def _current_processing_remaining(self, now: float) -> float:
+        if not self.currently_processing:
+            return 0.0
+
+        started_at = self.currently_processing.get("started_at")
+        if started_at is None:
+            return self.processing_time
+
+        elapsed = now - started_at
+        return max(self.processing_time - elapsed, 0.0)
+
+    def estimate_wait_seconds(self, queue_position: int, now: float | None = None) -> float:
+        current_time = now if now is not None else game_now()
+        return self._current_processing_remaining(current_time) + (queue_position * self.processing_time)
+
     def start(self):
         if self.thread_started:
             return
@@ -67,6 +82,7 @@ class Gate:
                 if self.queue:
                     guest = self.queue.pop(0)
                     guest["status"] = "processing"
+                    guest["started_at"] = game_now()
                     self.currently_processing = guest
 
             if guest is None:
@@ -243,9 +259,15 @@ class GateManager:
                 db.session.commit()
                 guest["arrival_id"] = arrival.id
 
+<<<<<<< HEAD
             with gate.lock:
                 position = gate.enqueue(guest)
                 queue_size = self._gate_size_locked(gate)
+=======
+        with gate.lock:
+            position = gate.enqueue(guest)
+            estimated_wait_seconds = gate.estimate_wait_seconds(position)
+>>>>>>> bde9c6d8ac51dc2e11f53c09d28ce730071fc63a
 
         return {
             "guest_id": guest["guest_id"],
@@ -253,6 +275,7 @@ class GateManager:
             "position": position,
             "queue_size": queue_size,
             "queued_at": guest["queued_at"],
+            "estimated_wait_seconds": estimated_wait_seconds,
         }
 
     def open_gate(self, gate_type: str, gate_id: str | None = None) -> dict:
