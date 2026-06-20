@@ -1,0 +1,93 @@
+version: "3.9"
+
+services:
+  hotel-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: hotel
+      POSTGRES_PASSWORD: hotel
+      POSTGRES_DB: hotel
+    ports:
+      - "5433:5432"
+
+  beach-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: beach
+      POSTGRES_PASSWORD: beach
+      POSTGRES_DB: beach
+    ports:
+      - "5434:5432"
+
+  airport:
+    build: ./services/airport
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - BROADCAST_SERVICE_URL=http://broadcast:3002
+      - SIMULATION_START_TIME=2026-06-20T00:00:00Z
+      - GAME_SPEED=300
+      - EU_GATES=3
+      - ALL_GATES=2
+      - PROCESSING_TIME_EU=300
+      - PROCESSING_TIME_ALL=600
+
+  hotel:
+    build: ./services/hotel
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://hotel:hotel@hotel-db:5432/hotel
+    depends_on:
+      - hotel-db
+
+  beach:
+    build: ./services/beach
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_PORT=8080
+      - JDBC_URL=jdbc:postgresql://beach-db:5432/beach
+      - DB_USER=beach
+      - DB_PASSWORD=beach
+    depends_on:
+      - beach-db
+
+  broadcast:
+    build: ./services/broadcast
+    ports:
+      - "3002:3002"
+
+  parrot:
+    build: ./services/parrot
+    ports:
+      - "3003:3003"
+    environment:
+      - LLM_MODEL=meta-llama/llama-3.1-8b-instruct
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - AIRPORT_SERVICE_URL=http://airport:3001
+      - HOTEL_SERVICE_URL=http://hotel:3000
+      - BEACH_SERVICE_URL=http://beach:8080
+      - BROADCAST_SERVICE_URL=http://broadcast:3002
+      - PARROT_SERVICE_URL=http://parrot:3003
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173
+    depends_on:
+      - airport
+      - hotel
+      - beach
+      - broadcast
+      - parrot
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
