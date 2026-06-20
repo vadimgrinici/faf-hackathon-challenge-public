@@ -47,7 +47,8 @@ function getErrorMessage(data: unknown, fallback: string): string {
 }
 
 function createJsonApi(basePath = "") {
-  const instance = axios.create({ baseURL: `${env.gatewayUrl}${basePath}` });
+  const gatewayUrl = env.gatewayUrl || "http://localhost:8000";
+  const instance = axios.create({ baseURL: `${gatewayUrl}${basePath}` });
 
   instance.interceptors.request.use((config) => {
     const token = useSessionStore.getState().authToken;

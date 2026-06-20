@@ -91,6 +91,7 @@ When a guest arrives via `POST /arrivals`:
    - `non-EU` guests are assigned to the shortest ALL gate.
    - `EU` guests are assigned to the shortest EU gate, but spill over to the shortest ALL gate when that ALL gate's queue is strictly shorter (cross-type load balancing).
 2. Insert into the chosen gate's priority queue
+3. If a same-surname family member is already waiting or processing at a gate, new guests with that surname are routed to the same gate so the family stays together.
 
 ### Priority ordering
 
@@ -103,6 +104,10 @@ Guests are ordered within each gate's queue by priority rank:
 | 2    | `priority = "standard"`|
 
 A guest with a disability always jumps ahead of fast and standard guests. Fast-track guests jump ahead of standard guests.
+
+### Minor hold rule
+
+Guests under 12 may wait in the queue normally, but a minor cannot enter the booth or be processed unless the gate has a same-surname family member available at passport control. If a minor reaches the front without an accompanying family member, the gate worker skips them until a matching family member is available.
 
 ### Rehydration on restart
 

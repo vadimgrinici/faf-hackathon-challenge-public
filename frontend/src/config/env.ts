@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 const EnvSchema = z.object({
-  VITE_GATEWAY_URL: z.string().default(""),
+  VITE_GATEWAY_URL: z.string().default("http://localhost:8000"),
   VITE_MOCK: z.string().default("false"),
   VITE_ADMIN_PASSCODE: z.string().default(""),
   VITE_TRAFFIC_GENERATOR: z.string().default("on"),
@@ -13,7 +13,7 @@ const EnvSchema = z.object({
 const parsed = EnvSchema.parse(import.meta.env);
 
 export const env = {
-  gatewayUrl: parsed.VITE_GATEWAY_URL,
+  gatewayUrl: parsed.VITE_GATEWAY_URL || "http://localhost:8000",
   mock: parsed.VITE_MOCK === "true",
   adminPasscode: parsed.VITE_ADMIN_PASSCODE,
   trafficGeneratorEnabled: parsed.VITE_TRAFFIC_GENERATOR !== "off",
