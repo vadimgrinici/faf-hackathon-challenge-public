@@ -3,6 +3,8 @@ import type { AxiosRequestConfig } from "axios";
 import type { ZodType } from "zod";
 
 import { env } from "@/config/env";
+import { useSessionStore } from "@/stores/session-store";
+
 
 export type ApiError = { ok: false; status: number; message: string };
 export type ApiResult<T> = { ok: true; data: T } | ApiError;

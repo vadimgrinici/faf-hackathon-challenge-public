@@ -87,5 +87,11 @@ services:
     build: ./frontend
     ports:
       - "5173:5173"
+    environment:
+      - VITE_GATEWAY_URL=http://localhost:8000
+      - VITE_MOCK=false
+      - VITE_TRAFFIC_GENERATOR=on
+      - VITE_SIMULATION_START_TIME=2026-06-20T00:00:00Z
+      - VITE_GAME_SPEED=300
     depends_on:
       - gateway

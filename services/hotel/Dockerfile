@@ -11,8 +11,7 @@ COPY . .
 
 RUN pnpm exec prisma generate
 RUN pnpm run build
-RUN chmod +x entrypoint.sh
-
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 EXPOSE 3000
 
 CMD ["./entrypoint.sh"]
