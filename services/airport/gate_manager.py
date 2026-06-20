@@ -299,33 +299,30 @@ class GateManager:
         else:
             gate = self._shortest_queue_gate("ALL")
 
-            guest["queued_at"] = game_now()
-            guest["status"] = "queued"
-            guest["gate"] = gate.gate_id
+        guest["queued_at"] = game_now()
+        guest["status"] = "queued"
+        guest["gate"] = gate.gate_id
 
-            with self.app.app_context():
-                arrival = Arrival(
-                    guest_id=guest["guest_id"],
-                    name=guest["name"],
-                    surname=guest["surname"],
-                    age=guest["age"],
-                    passport_type=guest["passport_type"],
-                    priority=guest["priority"],
-                    disability=guest.get("disability", False),
-                    status="queued",
-                    gate=gate.gate_id,
-                    queued_at=guest["queued_at"],
-                )
-                db.session.add(arrival)
-                db.session.commit()
-                guest["arrival_id"] = arrival.id
-
-            with gate.lock:
-                position = gate.enqueue(guest)
-                queue_size = self._gate_size_locked(gate)
+        with self.app.app_context():
+            arrival = Arrival(
+                guest_id=guest["guest_id"],
+                name=guest["name"],
+                surname=guest["surname"],
+                age=guest["age"],
+                passport_type=guest["passport_type"],
+                priority=guest["priority"],
+                disability=guest.get("disability", False),
+                status="queued",
+                gate=gate.gate_id,
+                queued_at=guest["queued_at"],
+            )
+            db.session.add(arrival)
+            db.session.commit()
+            guest["arrival_id"] = arrival.id
 
         with gate.lock:
             position = gate.enqueue(guest)
+            queue_size = self._gate_size_locked(gate)
 
         return {
             "guest_id": guest["guest_id"],
