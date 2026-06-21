@@ -102,6 +102,14 @@ func CacheMiddleware(ttl time.Duration) func(http.Handler) http.Handler {
 				return
 			}
 
+			// /queue must always reflect live backend state (gate open/close
+			// changes counts and distribution immediately) — never cache it,
+			// regardless of GATEWAY_CACHE_TTL.
+			if strings.HasSuffix(r.URL.Path, "/queue") {
+				next.ServeHTTP(w, r)
+				return
+			}
+
 			// Key on method + path + canonicalized query so requests that
 			// differ only by query string don't collide.
 			key := r.Method + " " + r.URL.Path + "?" + r.URL.Query().Encode()

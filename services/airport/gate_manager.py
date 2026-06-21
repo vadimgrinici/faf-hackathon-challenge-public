@@ -12,6 +12,13 @@ _arrival_schema = ArrivalSchema()
 
 PRIORITY_RANKS = {"fast": 1, "standard": 2}
 
+# Upper bound on how many gates of each type can be open at once via the
+# admin "open gate" endpoint. Internal safeguard only — not env-configurable,
+# since opening a gate always mints a fresh gate ID rather than restoring a
+# closed one, so without a cap repeated open/close cycles would grow the gate
+# count without bound.
+MAX_GATES_PER_TYPE = {"EU": 3, "ALL": 2}
+
 
 def _effective_rank(guest: dict) -> int:
     if guest.get("disability"):
@@ -399,14 +406,31 @@ class GateManager:
             "total_queued": total_queued,
             "current_game_time": now,
         }
+
+    def _open_gate_count(self, gate_type: str) -> int:
+        # Closed gates are fully removed from self.gates (see close_gate), so
+        # every gate of this type currently in the dict is open right now.
+        return sum(1 for gate in self.gates.values() if gate.gate_type == gate_type)
+
     def open_gate(self, gate_type: str) -> dict:
-        """Create a new gate of the given type and start its worker thread."""
+        """Create a new gate of the given type and start its worker thread.
+
+        Capped per type (MAX_GATES_PER_TYPE) so that repeatedly opening gates
+        — including "reopening" after a close, which always creates a fresh
+        gate rather than restoring the old one — can't grow the gate count
+        without bound.
+        """
         if gate_type not in ("EU", "ALL"):
             raise ValueError(f"Invalid gate type: {gate_type}")
 
         processing_time = PROCESSING_TIME_EU if gate_type == "EU" else PROCESSING_TIME_ALL
+        max_gates = MAX_GATES_PER_TYPE[gate_type]
 
         with self.assignment_lock:
+            if self._open_gate_count(gate_type) >= max_gates:
+                raise ValueError(
+                    f"Cannot open another {gate_type} gate: limit of {max_gates} reached"
+                )
             gate_id = self._next_gate_id(gate_type)
             gate = Gate(gate_id, gate_type, processing_time, self.app, self.broadcast_client)
             self.gates[gate_id] = gate
