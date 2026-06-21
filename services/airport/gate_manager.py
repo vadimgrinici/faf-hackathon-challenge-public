@@ -170,6 +170,14 @@ class Gate:
                 guest["processed_at"] = processed_at
                 guest["wait_time_seconds"] = wait_time
 
+            # Clear the in-memory slot immediately so queue_size() stops
+            # counting these guests the moment processing is logically done.
+            # DB writes and broadcast happen after releasing the lock so they
+            # don't block incoming /queue reads.
+            with self.lock:
+                self.currently_processing = []
+                self.processing_started_at = None
+
             with self.app.app_context():
                 for guest in batch:
                     arrival = db.session.get(Arrival, guest["arrival_id"])
@@ -181,10 +189,6 @@ class Gate:
 
             for guest in batch:
                 self.broadcast.publish_event(guest)
-
-            with self.lock:
-                self.currently_processing = []
-                self.processing_started_at = None
 
 
 class GateManager:
