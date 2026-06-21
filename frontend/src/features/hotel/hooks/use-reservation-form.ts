@@ -11,8 +11,8 @@ import {
   type ReservationFormValues,
 } from "@/features/hotel/schemas/reservation-form-schema";
 import { useSessionStore } from "@/stores/session-store";
-import { addDays } from "date-fns";
 import type { Reservation } from "@/features/hotel/types";
+import { getCurrentSimulationDay, simulationDayToDate } from "@/lib/simulation-time";
 
 export function useReservationForm() {
   const guest = useSessionStore((s) => s.guest);
@@ -24,8 +24,8 @@ export function useReservationForm() {
     defaultValues: {
       room_type: "STANDARD",
       guest_count: 1,
-      check_in_date: new Date(),
-      check_out_date: addDays(new Date(), 1),
+      check_in_date: simulationDayToDate(getCurrentSimulationDay()),
+      check_out_date: simulationDayToDate(getCurrentSimulationDay() + 1),
     },
   });
 

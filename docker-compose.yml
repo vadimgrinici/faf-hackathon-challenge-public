@@ -38,6 +38,8 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgresql://hotel:hotel@hotel-db:5432/hotel
+      - SIMULATION_START_TIME=2026-06-20T00:00:00Z
+      - GAME_SPEED=300
     depends_on:
       - hotel-db
 
