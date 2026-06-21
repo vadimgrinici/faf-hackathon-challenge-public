@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { AdminLoginCard } from "@/features/guest-selection/components/admin-login-card";
 
 interface AdminBackProps {
-  onLogin: () => void;
+  onLogin: (passcode: string) => void;
   onFlip: () => void;
 }
 

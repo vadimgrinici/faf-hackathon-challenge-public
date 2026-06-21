@@ -4,7 +4,7 @@ import { IslandEvent } from "./types.js";
 const clients: Response[] = [];
 
 export function addClient(res: Response) {
-  //TODO: Add client
+  clients.push(res);
 }
 
 export function removeClient(res: Response) {

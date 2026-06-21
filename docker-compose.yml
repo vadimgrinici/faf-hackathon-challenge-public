@@ -60,6 +60,7 @@ services:
     ports:
       - "3002:3002"
     environment:
+      - PORT=3002
       - AIRPORT_TOKEN=airport-token
       - HOTEL_TOKEN=hotel-token
       - BEACH_TOKEN=beach-token

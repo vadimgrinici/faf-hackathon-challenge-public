@@ -15,4 +15,8 @@ export interface IslandEvent {
   timestamp: string;
   source: string;
   payload: unknown;
+  channel?: string;
+  event_type?: string;
+  message?: string;
+  sender?: string;
 }

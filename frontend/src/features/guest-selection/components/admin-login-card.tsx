@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 interface AdminLoginCardProps {
-  onLogin: () => void;
+  onLogin: (passcode: string) => void
 }
 
 const ADMIN_PASSCODE = env.adminPasscode;
@@ -49,7 +49,7 @@ export function AdminLoginCard({ onLogin }: AdminLoginCardProps) {
       return;
     }
 
-    onLogin();
+    onLogin(values.passcode);
   }
 
   const error = form.formState.errors.passcode?.message;

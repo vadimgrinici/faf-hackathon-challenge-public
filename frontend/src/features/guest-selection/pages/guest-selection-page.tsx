@@ -22,8 +22,8 @@ export function GuestSelectionPage() {
     navigate("/map");
   }
 
-  function handleAdminLogin() {
-    loginAdmin("Admin Observer");
+  function handleAdminLogin(passcode: string) {
+    loginAdmin("Admin Observer", passcode);
     navigate("/map");
   }
 

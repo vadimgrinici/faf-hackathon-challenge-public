@@ -23,3 +23,8 @@ export const BroadcastEventSchema = z.object({
 });
 
 export type BroadcastEvent = z.infer<typeof BroadcastEventSchema>;
+
+export const AnnouncementResponseSchema = z.object({
+  success: z.boolean(),
+});
+export type AnnouncementResponse = z.infer<typeof AnnouncementResponseSchema>;

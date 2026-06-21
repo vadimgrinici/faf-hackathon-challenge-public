@@ -36,6 +36,7 @@ func main() {
 	// Admin routes — protected by passcode middleware.
 	r.Group(func(r chi.Router) {
 		r.Use(PasscodeMiddleware(cfg.AdminPasscode))
+		r.Post("/admin/announcements", AdminProxyHandler(cfg.BroadcastServiceURL, "/admin/announcements"))
 		r.Put("/admin/rate-limit", AdminRateLimitHandler(rl))
 
 		// Gate management: proxy straight to the airport backend so it owns
@@ -44,8 +45,6 @@ func main() {
 		r.Delete("/admin/gates/{gateId}", AdminProxyHandlerWithParam(cfg.AirportServiceURL, "/admin/gates", "gateId"))
 	})
 
-	// Route to backend services. Each *_SERVICE_URL may list several instances
-	// (comma-separated); a pool with more than one URL is round-robined.
 	pools := map[string][]string{
 		"/api/airport":   cfg.AirportServicePool,
 		"/api/hotel":     cfg.HotelServicePool,

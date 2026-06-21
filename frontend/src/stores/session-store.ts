@@ -11,6 +11,7 @@ export type GuestSession = {
 export type AdminSession = {
   role: "admin";
   displayName: string;
+  passcode: string;
 };
 
 export type AppSession = GuestSession | AdminSession;
@@ -25,7 +26,7 @@ interface SessionState {
   guest: GuestProfile | null;
   isAdmin: boolean;
   selectGuest: (guest: GuestProfile) => void;
-  loginAdmin: (displayName?: string) => void;
+  loginAdmin: (displayName: string, passcode: string) => void;
   clearSession: () => void;
   clearGuest: () => void;
 }
@@ -46,9 +47,9 @@ function guestSessionState(guest: GuestProfile) {
   };
 }
 
-function adminSessionState(displayName: string) {
+function adminSessionState(displayName: string, passcode: string) {
   return {
-    session: { role: "admin", displayName } satisfies AdminSession,
+    session: { role: "admin", displayName, passcode } satisfies AdminSession,
     guest: null,
     isAdmin: true,
   };
@@ -84,8 +85,8 @@ export const useSessionStore = create<SessionState>()(
 
       selectGuest: (guest) => set(guestSessionState(guest)),
 
-      loginAdmin: (displayName = "Admin") =>
-        set(adminSessionState(displayName)),
+      loginAdmin: (displayName, passcode) =>
+        set(adminSessionState(displayName, passcode)),
 
       clearSession: () => set(EMPTY_SESSION_STATE),
 

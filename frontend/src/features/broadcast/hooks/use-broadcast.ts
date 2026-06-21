@@ -4,6 +4,15 @@ import { env } from "@/config/env";
 import { useEventsStore } from "@/stores/events-store";
 import { BroadcastEventSchema } from "@/types/broadcast";
 import type { ConnectionStatus } from "@/types/broadcast";
+import { api } from "@/lib/api-client";
+import { AnnouncementResponseSchema } from "@/types/broadcast";
+
+export function publishAnnouncement(message: string, sender?: string) {
+  return api.admin.post(AnnouncementResponseSchema, "/admin/announcements", {
+    message,
+    sender,
+  });
+}
 
 const BACKOFF_INITIAL_MS = 1_000;
 const BACKOFF_MAX_MS = 30_000;

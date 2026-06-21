@@ -83,6 +83,8 @@ export class ReservationService {
       );
     }
 
+    await this.rejectIfGuestHasNotClearedAirport(createReservationDto.guest_id);
+
     const reservation = await this.prisma.reservation.create({
       data: {
         guest_id: createReservationDto.guest_id,
@@ -101,8 +103,6 @@ export class ReservationService {
       },
       include: { party: true },
     });
-
-    await this.rejectIfGuestHasNotClearedAirport(reservation.guest_id);
 
     await this.broadcast.publishHotelEvent(
       HotelBroadcastEventType.ReservationConfirmed,

@@ -49,6 +49,15 @@ function getErrorMessage(data: unknown, fallback: string): string {
 function createJsonApi(basePath = "") {
   const instance = axios.create({ baseURL: `${env.gatewayUrl}${basePath}` });
 
+  instance.interceptors.request.use((config) => {
+    const session = useSessionStore.getState().session;
+    if (session?.role === "admin" && session.passcode) {
+      config.headers = config.headers ?? {};
+      config.headers["X-Admin-Passcode"] = session.passcode;
+    }
+    return config;
+  });
+
   async function request<T>(
     schema: ZodType<T>,
     config: AxiosRequestConfig
@@ -77,6 +86,8 @@ function createJsonApi(basePath = "") {
 export const api = {
   airport: createJsonApi("/api/airport"),
   beach: createJsonApi(),
+  broadcast: createJsonApi("/api/broadcast"),
+  admin: createJsonApi(""),
   hotel: createJsonApi("/api/hotel"),
   parrot: createJsonApi("/api/parrot"),
 };
