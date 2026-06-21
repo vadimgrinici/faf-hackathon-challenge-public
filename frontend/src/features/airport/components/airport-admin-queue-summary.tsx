@@ -1,11 +1,19 @@
-import { IconAlertCircle } from "@tabler/icons-react";
+import { useState } from "react";
+import { IconAlertCircle, IconPlus } from "@tabler/icons-react";
 
 import { Spinner } from "@/components/ui/spinner";
 import { AirportGateCard } from "@/features/airport/components/airport-gate-card";
-import { useQueue } from "@/features/airport/hooks/use-airport";
+import { useQueue, useOpenGate } from "@/features/airport/hooks/use-airport";
 
 export function AirportAdminQueueSummary() {
   const { data: queue, isLoading, error } = useQueue();
+  const { mutate: openGate, isPending: isOpening } = useOpenGate();
+  const [openingType, setOpeningType] = useState<"EU" | "ALL" | null>(null);
+
+  function handleOpen(gate_type: "EU" | "ALL") {
+    setOpeningType(gate_type);
+    openGate({ gate_type }, { onSettled: () => setOpeningType(null) });
+  }
 
   if (isLoading) {
     return (
@@ -43,9 +51,30 @@ export function AirportAdminQueueSummary() {
       <div className="grid gap-3 sm:grid-cols-2">
         {queue.gates.map((gate) => (
           <div data-testid={`gate-row-${gate.gate_id}`} key={gate.gate_id}>
-            <AirportGateCard gate={gate} />
+            <AirportGateCard gate={gate} isAdmin />
           </div>
         ))}
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          data-testid="open-gate-eu"
+          disabled={isOpening}
+          onClick={() => handleOpen("EU")}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/5 px-3 py-1.5 text-xs font-medium text-sky-700 transition-colors hover:bg-sky-500/10 disabled:opacity-50 dark:text-sky-400"
+        >
+          <IconPlus size={12} />
+          {openingType === "EU" ? "Opening…" : "Open EU gate"}
+        </button>
+        <button
+          data-testid="open-gate-all"
+          disabled={isOpening}
+          onClick={() => handleOpen("ALL")}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5 text-xs font-medium text-amber-700 transition-colors hover:bg-amber-500/10 disabled:opacity-50 dark:text-amber-400"
+        >
+          <IconPlus size={12} />
+          {openingType === "ALL" ? "Opening…" : "Open ALL gate"}
+        </button>
       </div>
     </div>
   );

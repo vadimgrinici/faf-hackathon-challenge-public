@@ -399,3 +399,81 @@ class GateManager:
             "total_queued": total_queued,
             "current_game_time": now,
         }
+    def open_gate(self, gate_type: str) -> dict:
+        """Create a new gate of the given type and start its worker thread."""
+        if gate_type not in ("EU", "ALL"):
+            raise ValueError(f"Invalid gate type: {gate_type}")
+
+        processing_time = PROCESSING_TIME_EU if gate_type == "EU" else PROCESSING_TIME_ALL
+
+        with self.assignment_lock:
+            gate_id = self._next_gate_id(gate_type)
+            gate = Gate(gate_id, gate_type, processing_time, self.app, self.broadcast_client)
+            self.gates[gate_id] = gate
+            gate.start()
+
+        return {"gate_id": gate_id, "gate_type": gate_type, "open": True, "queue_size": 0}
+
+    def close_gate(self, gate_id: str) -> dict:
+        """Close a gate: stop accepting guests, redistribute queued guests,
+        let any currently-processing batch finish naturally, then remove the gate."""
+        gate = self.gates.get(gate_id)
+        if gate is None:
+            raise KeyError(f"Gate {gate_id} not found")
+
+        with self.assignment_lock:
+            # Stop accepting new arrivals immediately.
+            with gate.lock:
+                gate.accepting = False
+                guests_to_redistribute = list(gate.queue)
+                gate.queue.clear()
+                gate.active_family_surname = None
+
+        # Redistribute queued guests to other open gates.
+        failed = []
+        for guest in guests_to_redistribute:
+            try:
+                new_gate = self._select_gate_for_guest(guest, exclude_gate_id=gate_id)
+                guest["gate"] = new_gate.gate_id
+                guest["status"] = "queued"
+                with new_gate.lock:
+                    new_gate.enqueue(guest)
+                self._persist_gate_change(guest, new_gate.gate_id)
+            except ValueError:
+                failed.append(guest)
+
+        if failed:
+            # No alternative gate available — restore the gate.
+            with gate.lock:
+                gate.accepting = True
+                for guest in failed:
+                    gate.enqueue(guest)
+            raise ValueError(
+                f"Cannot close {gate_id}: no alternative gate available for "
+                f"{len(failed)} guest(s). Open another gate first."
+            )
+
+        # Let the worker finish any currently-processing batch naturally,
+        # then shut it down and remove it from the registry.
+        def _stop_when_idle():
+            while True:
+                with gate.lock:
+                    if not gate.currently_processing:
+                        gate.running = False
+                        self.gates.pop(gate_id, None)
+                        return
+                time.sleep(0.1)
+
+        threading.Thread(target=_stop_when_idle, daemon=True).start()
+
+        redistributed = len(guests_to_redistribute)
+        return {
+            "gate_id": gate_id,
+            "gate_type": gate.gate_type,
+            "open": False,
+            "guests_redistributed": redistributed,
+            "message": (
+                f"Gate {gate_id} closed. {redistributed} guest(s) redistributed. "
+                "Any guest currently being processed will finish normally."
+            ),
+        }

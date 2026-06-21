@@ -30,8 +30,19 @@ func main() {
 	// Health check (aggregates all backend health endpoints)
 	r.Get("/health", HealthHandler(cfg))
 
-	// Admin: adjust the rate limiter at runtime.
-	r.Put("/admin/rate-limit", AdminRateLimitHandler(rl))
+	// Admin login — open endpoint, validates passcode and returns 200/401.
+	r.Post("/admin/login", AdminLoginHandler(cfg.AdminPasscode))
+
+	// Admin routes — protected by passcode middleware.
+	r.Group(func(r chi.Router) {
+		r.Use(PasscodeMiddleware(cfg.AdminPasscode))
+		r.Put("/admin/rate-limit", AdminRateLimitHandler(rl))
+
+		// Gate management: proxy straight to the airport backend so it owns
+		// all gate state. GET /queue already reflects the backend's live state.
+		r.Post("/admin/gates", AdminProxyHandler(cfg.AirportServiceURL, "/admin/gates"))
+		r.Delete("/admin/gates/{gateId}", AdminProxyHandlerWithParam(cfg.AirportServiceURL, "/admin/gates", "gateId"))
+	})
 
 	// Route to backend services. Each *_SERVICE_URL may list several instances
 	// (comma-separated); a pool with more than one URL is round-robined.

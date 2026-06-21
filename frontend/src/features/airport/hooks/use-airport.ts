@@ -1,11 +1,15 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getArrivalStatus,
   getQueue,
+  openGate,
+  closeGate,
 } from "@/features/airport/api/airport-client";
 import { AIRPORT_KEYS } from "@/features/airport/query-keys";
 import { useSessionStore } from "@/stores/session-store";
 import { POLL_INTERVAL_MS } from "@/lib/polling";
+import { toast } from "sonner";
+import type { OpenGateRequest } from "@/features/airport/types";
 
 const ARRIVAL_COMPLETE_STATUS = "processed";
 
@@ -41,5 +45,33 @@ export function useQueue() {
     queryKey: [...AIRPORT_KEYS.QUEUE],
     queryFn: getQueue,
     refetchInterval: POLL_INTERVAL_MS,
+  });
+}
+
+export function useOpenGate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: OpenGateRequest) => openGate(body),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [...AIRPORT_KEYS.QUEUE] });
+      toast.success(`Gate ${data.gate_id} opened`);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+}
+
+export function useCloseGate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (gateId: string) => closeGate(gateId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [...AIRPORT_KEYS.QUEUE] });
+      toast.success(data.message);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
   });
 }

@@ -76,16 +76,12 @@ def register_routes(app):
         if passport_type:
             query = query.filter_by(passport_type=passport_type)
 
-        # Stable order: queued_at desc, with id desc as a tiebreaker since
-        # queued_at is not guaranteed unique.
         query = query.order_by(Arrival.queued_at.desc(), Arrival.id.desc())
 
         total = query.count()
 
         limit_param = request.args.get("limit")
         if limit_param is None:
-            # No limit provided: preserve original behavior — return
-            # everything in one response.
             arrivals = query.all()
             return jsonify({
                 "arrivals": arrivals_schema.dump(arrivals),
@@ -112,7 +108,6 @@ def register_routes(app):
                 | ((Arrival.queued_at == cursor_queued_at) & (Arrival.id < cursor_id))
             )
 
-        # Fetch one extra row to know whether there's a next page.
         page = query.limit(limit + 1).all()
 
         has_more = len(page) > limit
@@ -140,3 +135,37 @@ def register_routes(app):
     @app.route("/health", methods=["GET"])
     def health():
         return jsonify({"status": "ok"}), 200
+
+    @app.route("/admin/gates", methods=["POST"])
+    def open_gate():
+        data = request.get_json(silent=True) or {}
+        gate_type = data.get("gate_type")
+        if gate_type not in ("EU", "ALL"):
+            return jsonify({"error": "gate_type must be 'EU' or 'ALL'"}), 400
+        try:
+            result = app.gate_manager.open_gate(gate_type)
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 400
+
+        # Shape must match OpenGateResponseSchema: { gate_id, gate_type, message }
+        return jsonify({
+            "gate_id": result["gate_id"],
+            "gate_type": result["gate_type"],
+            "message": f"Gate {result['gate_id']} opened",
+        }), 201
+
+    @app.route("/admin/gates/<gate_id>", methods=["DELETE"])
+    def close_gate(gate_id):
+        try:
+            result = app.gate_manager.close_gate(gate_id)
+        except KeyError as e:
+            return jsonify({"error": str(e)}), 404
+        except ValueError as e:
+            return jsonify({"error": str(e)}), 409
+
+        # Shape must match CloseGateResponseSchema: { gate_id, message, redistributed_guests }
+        return jsonify({
+            "gate_id": result["gate_id"],
+            "message": result["message"],
+            "redistributed_guests": result["guests_redistributed"],
+        }), 200

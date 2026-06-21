@@ -27,6 +27,7 @@ type Config struct {
 
 	CORSOrigins    []string
 	InternalSecret string
+	AdminPasscode  string
 
 	// Optional cache and rate-limit settings. All disabled by their zero value.
 	CacheTTL           time.Duration // GATEWAY_CACHE_TTL — response cache TTL (0 = off)
@@ -58,6 +59,7 @@ func LoadConfig() Config {
 
 		CORSOrigins:    splitEnv("CORS_ALLOWED_ORIGINS", ""),
 		InternalSecret: getEnv("INTERNAL_SECRET", ""),
+		AdminPasscode:  getEnv("ADMIN_PASSCODE", ""),
 
 		CacheTTL:           getDurationEnv("GATEWAY_CACHE_TTL", 0),
 		RateLimitPerWindow: getIntEnv("GATEWAY_RATE_LIMIT", 0),

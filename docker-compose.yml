@@ -24,6 +24,7 @@ services:
     environment:
       - PORT=3001
       - BROADCAST_SERVICE_URL=http://broadcast:3002
+      - INTERNAL_SECRET=airport-token
       - SIMULATION_START_TIME=2026-06-20T00:00:00Z
       - GAME_SPEED=300
       - EU_GATES=3
@@ -56,11 +57,24 @@ services:
     build: ./services/broadcast
     ports:
       - "3002:3002"
+    environment:
+      - AIRPORT_TOKEN=airport-token
+      - HOTEL_TOKEN=hotel-token
+      - BEACH_TOKEN=beach-token
+      - PARROT_TOKEN=parrot-token
+      - FE_TOKEN=fe-token
 
   parrot:
     build: ./services/parrot
     ports:
       - "3003:3003"
+    environment:
+      - LLM_MODEL=meta-llama/llama-3.1-8b-instruct
+
+  parrot-b:
+    build: ./services/parrot
+    ports:
+      - "3004:3003"
     environment:
       - LLM_MODEL=meta-llama/llama-3.1-8b-instruct
 
@@ -74,24 +88,28 @@ services:
       - HOTEL_SERVICE_URL=http://hotel:3000
       - BEACH_SERVICE_URL=http://beach:8080
       - BROADCAST_SERVICE_URL=http://broadcast:3002
-      - PARROT_SERVICE_URL=http://parrot:3003
+      - PARROT_SERVICE_URL=http://parrot:3003,http://parrot-b:3003
       - CORS_ALLOWED_ORIGINS=http://localhost:5173
+      - GATEWAY_RATE_LIMIT=0
+      - ADMIN_PASSCODE=pirate-23-coconut
     depends_on:
       - airport
       - hotel
       - beach
       - broadcast
       - parrot
+      - parrot-b
 
   frontend:
     build: ./frontend
     ports:
       - "5173:5173"
     environment:
-      - VITE_GATEWAY_URL=http://localhost:8000
-      - VITE_MOCK=false
-      - VITE_TRAFFIC_GENERATOR=on
-      - VITE_SIMULATION_START_TIME=2026-06-20T00:00:00Z
-      - VITE_GAME_SPEED=300
+    - VITE_GATEWAY_URL=http://localhost:8000
+    - VITE_MOCK=false
+    - VITE_TRAFFIC_GENERATOR=off
+    - VITE_SIMULATION_START_TIME=2026-06-20T00:00:00Z
+    - VITE_GAME_SPEED=300
+    - VITE_ADMIN_PASSCODE=pirate-23-coconut
     depends_on:
       - gateway
