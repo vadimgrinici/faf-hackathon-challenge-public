@@ -72,7 +72,7 @@ function OccupancyBar({
 
 function RoomCard({ room }: { room: Room }) {
   const config = ROOM_CONFIG[room.type];
-  const vacant = room.occupancy === 0;
+  const vacant = room.current_guests === 0;
 
   return (
     <div
@@ -110,7 +110,7 @@ function RoomCard({ room }: { room: Room }) {
           {vacant ? "vacant" : "occupied"}
         </span>
       </div>
-      <OccupancyBar current={room.occupancy} capacity={room.capacity} />
+      <OccupancyBar current={room.current_guests} capacity={room.capacity} />
     </div>
   );
 }
@@ -145,7 +145,7 @@ export function HotelAdminRoomSummary() {
   }
 
   const rooms = data.rooms;
-  const occupiedCount = rooms.filter((r) => r.occupancy > 0).length;
+  const occupiedCount = rooms.filter((r) => r.current_guests > 0).length;
 
   return (
     <div data-testid="room-summary" className="flex flex-col gap-3">

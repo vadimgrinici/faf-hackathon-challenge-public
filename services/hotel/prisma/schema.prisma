@@ -36,4 +36,19 @@ model Reservation {
   check_out_day Int
   status        ReservationStatus @default(CONFIRMED)
   room          Room              @relation(fields: [room_id], references: [id])
+  party         ReservationGuest[]
+}
+
+// Join table representing the 1-to-many relationship between a reservation
+// and the guests in its party. guest_id is a plain string (same convention
+// as Reservation.guest_id / Arrival.guest_id elsewhere) — there is no
+// canonical "Guest" table anywhere in the system to foreign-key against.
+model ReservationGuest {
+  id             String      @id @default(uuid())
+  reservation_id String
+  guest_id       String
+  reservation    Reservation @relation(fields: [reservation_id], references: [id], onDelete: Cascade)
+
+  @@unique([reservation_id, guest_id])
+  @@index([reservation_id])
 }

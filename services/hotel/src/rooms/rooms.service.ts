@@ -14,27 +14,32 @@ export class RoomsService {
   async findAll(): Promise<RoomsResponseDto> {
     const currentDay = this.simulation.currentDay();
 
-    const [rooms, occupiedRooms] = await Promise.all([
+    const [rooms, activeReservations] = await Promise.all([
       this.prisma.room.findMany({
         orderBy: { id: 'asc' },
       }),
-      this.prisma.reservation.groupBy({
-        by: ['room_id'],
+      this.prisma.reservation.findMany({
         where: {
           status: ReservationStatus.CONFIRMED,
           check_in_day: { lte: currentDay },
           check_out_day: { gt: currentDay },
         },
-        _sum: { guest_count: true },
+        include: { party: true },
       }),
     ]);
 
-    const currentGuestsByRoomId = new Map(
-      occupiedRooms.map((reservationGroup) => [
-        reservationGroup.room_id,
-        reservationGroup._sum.guest_count ?? 0,
-      ]),
-    );
+    // Occupancy reflects the actual party size when one was supplied at
+    // booking time, falling back to guest_count otherwise — same rule used
+    // for capacity validation in ReservationService.create().
+    const currentGuestsByRoomId = new Map<string, number>();
+    for (const reservation of activeReservations) {
+      const partySize =
+        reservation.party.length > 0
+          ? reservation.party.length
+          : reservation.guest_count;
+      const previous = currentGuestsByRoomId.get(reservation.room_id) ?? 0;
+      currentGuestsByRoomId.set(reservation.room_id, previous + partySize);
+    }
 
     return {
       rooms: rooms.map((room) => ({

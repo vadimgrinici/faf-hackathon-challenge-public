@@ -28,13 +28,22 @@ export class ReservationService {
       );
     }
 
+    // Capacity is validated against the actual party when one is supplied;
+    // guest_count remains the fallback so existing callers that only send
+    // guest_count keep working exactly as before.
+    const partyGuestIds = createReservationDto.party_guest_ids ?? [];
+    const partySize =
+      partyGuestIds.length > 0
+        ? partyGuestIds.length
+        : createReservationDto.guest_count;
+
     const rooms = await this.prisma.room.findMany({
       where: { type: createReservationDto.room_type },
       orderBy: { id: 'asc' },
     });
 
     const maxCapacity = Math.max(...rooms.map((room) => room.capacity));
-    if (createReservationDto.guest_count > maxCapacity) {
+    if (partySize > maxCapacity) {
       throw new HttpException(
         {
           error: `Room type ${createReservationDto.room_type} supports at most ${maxCapacity} guests`,
@@ -46,7 +55,7 @@ export class ReservationService {
     let availableRoom: (typeof rooms)[number] | null = null;
 
     for (const room of rooms) {
-      if (createReservationDto.guest_count > room.capacity) {
+      if (partySize > room.capacity) {
         continue;
       }
 
@@ -82,7 +91,15 @@ export class ReservationService {
         check_in_day: createReservationDto.check_in_day,
         check_out_day: createReservationDto.check_out_day,
         status: ReservationStatus.CONFIRMED,
+        party: partyGuestIds.length
+          ? {
+              create: partyGuestIds.map((guestId) => ({
+                guest_id: guestId,
+              })),
+            }
+          : undefined,
       },
+      include: { party: true },
     });
 
     await this.rejectIfGuestHasNotClearedAirport(reservation.guest_id);
@@ -106,6 +123,7 @@ export class ReservationService {
       room_id: reservation.room_id,
       room_type: availableRoom.type,
       guest_count: reservation.guest_count,
+      party_guest_ids: reservation.party.map((p) => p.guest_id),
       check_in_day: reservation.check_in_day,
       check_out_day: reservation.check_out_day,
       status: reservation.status,
@@ -130,7 +148,7 @@ export class ReservationService {
   async findById(id: string): Promise<ReservationResponseDto> {
     const reservation = await this.prisma.reservation.findUnique({
       where: { id },
-      include: { room: true },
+      include: { room: true, party: true },
     });
 
     if (!reservation) {
@@ -146,6 +164,7 @@ export class ReservationService {
       room_id: reservation.room_id,
       room_type: reservation.room.type,
       guest_count: reservation.guest_count,
+      party_guest_ids: reservation.party.map((p) => p.guest_id),
       check_in_day: reservation.check_in_day,
       check_out_day: reservation.check_out_day,
       status: reservation.status,
@@ -159,7 +178,7 @@ export class ReservationService {
                rm.type AS room_type
         FROM "Reservation" r
         JOIN "Room" rm ON rm.id = r.room_id
-        WHERE r.guest_id = ${Prisma.raw(`'${guestId}'`)}
+        WHERE r.guest_id = ${guestId}
           AND r.status = 'CONFIRMED'
         ORDER BY r.check_in_day DESC
         LIMIT 1
@@ -174,12 +193,17 @@ export class ReservationService {
     }
 
     const row = rows[0];
+    const party = await this.prisma.reservationGuest.findMany({
+      where: { reservation_id: row.id },
+    });
+
     return {
       id: row.id,
       guest_id: row.guest_id,
       room_id: row.room_id,
       room_type: row.room_type,
       guest_count: row.guest_count,
+      party_guest_ids: party.map((p) => p.guest_id),
       check_in_day: row.check_in_day,
       check_out_day: row.check_out_day,
       status: row.status,
@@ -187,26 +211,48 @@ export class ReservationService {
   }
 
   async cancel(id: string): Promise<CancelReservationResponseDto> {
-    // id is UUID generated server-side, not user-controlled string
-    await this.prisma.$executeRaw(
-      Prisma.sql`UPDATE "Reservation" SET status = 'CANCELLED' WHERE id = ${Prisma.raw(`'${id}'`)}`,
-    );
-
-    const existingReservation = await this.prisma.reservation.findFirst({
-      where: { id, status: ReservationStatus.CANCELLED },
+    const existing = await this.prisma.reservation.findUnique({
+      where: { id },
     });
 
-    if (!existingReservation) {
+    if (!existing) {
       throw new HttpException(
         { error: 'Reservation not found' },
         HttpStatus.NOT_FOUND,
       );
     }
 
+    if (existing.status === ReservationStatus.CANCELLED) {
+      // Already cancelled — no-op. No broadcast event, since there's no
+      // active-to-cancelled transition happening here.
+      return {
+        id: existing.id,
+        status: existing.status,
+      };
+    }
+
+    // Conditional UPDATE (status != CANCELLED) so the active->cancelled
+    // transition is atomic: under concurrent cancel calls for the same
+    // reservation, only one request's UPDATE actually matches a row, so
+    // only one broadcast event is ever emitted.
+    const updatedCount = await this.prisma.$executeRaw(
+      Prisma.sql`UPDATE "Reservation" SET status = 'CANCELLED' WHERE id = ${id} AND status != 'CANCELLED'`,
+    );
+
     const reservation = await this.prisma.reservation.findUniqueOrThrow({
-      where: { id: existingReservation.id },
+      where: { id },
       include: { room: true },
     });
+
+    if (updatedCount === 0) {
+      // Lost the race to another concurrent cancel — already cancelled by
+      // the time our UPDATE ran. Treat the same as the already-cancelled
+      // no-op path: no event.
+      return {
+        id: reservation.id,
+        status: reservation.status,
+      };
+    }
 
     await this.broadcast.publishHotelEvent(
       HotelBroadcastEventType.ReservationCancelled,

@@ -25,7 +25,7 @@ export const RoomSchema = z.object({
   type: RoomTypeSchema,
   capacity: z.number().int(),
   price_per_night: z.number().int(),
-  occupancy: z.number().int(),
+  current_guests: z.number().int(),
 });
 
 export const RoomsResponseSchema = z.object({
